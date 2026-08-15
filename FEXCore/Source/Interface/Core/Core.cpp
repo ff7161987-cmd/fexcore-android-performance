@@ -631,7 +631,9 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
         // It is potentially correctness bearing in that sense, but that is a
         // side effect here and (if that behaviour is required) we should handle
         // that more explicitly later.
-        Thread->OpDispatcher->FlushRegisterCache(true);
+        if (!Config.AggressiveRegisterCache()) {
+          Thread->OpDispatcher->FlushRegisterCache(true);
+        }
 
         if (ExtendedDebugInfo || Thread->OpDispatcher->CanHaveSideEffects(TableInfo, DecodedInfo)) {
           Thread->OpDispatcher->_GuestOpcode(InstAddress - GuestRIP);

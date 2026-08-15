@@ -9,6 +9,14 @@
           "Can cause long JIT compilation times and stutter"
         ]
       },
+      "AggressiveRegisterCache": {
+        "Type": "bool",
+        "Default": "true",
+        "Desc": [
+          "Keeps static register-cache values across guest instructions during IR generation",
+          "Experimental: can reduce JIT work and generated loads/stores, but may regress tied-register cases"
+        ]
+      },
       "MaxInst": {
         "Type": "int32",
         "Default": "5000",
