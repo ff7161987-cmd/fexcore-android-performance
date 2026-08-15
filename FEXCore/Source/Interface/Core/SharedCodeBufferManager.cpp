@@ -13,9 +13,9 @@
 
 namespace FEXCore::CPU {
 // ETS2 and other long-running games can exhaust the first cache generation quickly.
-// Starting at 32 MiB reduces early cache migration/retranslation while remaining
-// well below the 128 MiB maximum and preserving the existing geometric growth.
-static constexpr size_t INITIAL_CODE_SIZE = 1024 * 1024 * 32;
+// Starting at 50 MiB reduces early cache migration/retranslation while remaining
+// below the 128 MiB maximum and preserving the existing geometric growth.
+static constexpr size_t INITIAL_CODE_SIZE = 1024 * 1024 * 50;
 // We don't want to move above 128MB atm because that means we will have to encode longer jumps
 static constexpr size_t MAX_CODE_SIZE = 1024 * 1024 * 128;
 
