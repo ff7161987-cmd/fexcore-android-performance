@@ -619,21 +619,23 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
 
         bool IsLocked = DecodedInfo->Flags & FEXCore::X86Tables::DecodeFlags::FLAG_LOCK;
 
-        // Do a partial register cache flush before every instruction. This
-        // prevents cross-instruction static register caching, while allowing
-        // context load/stores to be optimized within a block. Theoretically,
-        // this flush is not required for correctness, all mandatory flushes are
-        // included in instruction-specific handlers. Instead, this is a blunt
-        // heuristic to make the register cache less aggressive, as the current
-        // RA generates bad code in common cases with tied registers otherwise.
-        //
-        // However, it makes our exception handling behaviour more predictable.
-        // It is potentially correctness bearing in that sense, but that is a
-        // side effect here and (if that behaviour is required) we should handle
-        // that more explicitly later.
-        Thread->OpDispatcher->FlushRegisterCache(true);
+        // The upstream per-instruction partial flush is a conservative heuristic
+        // for tied-register allocator failures. It also forces every arithmetic
+        // instruction to spill the static guest register cache. Keep the flush
+        // on architectural boundaries and potentially faulting/memory operations,
+        // but allow a bounded window for simple arithmetic instructions in the
+        // experimental interval mode. Interval 1 is exactly the upstream
+        // behaviour; larger values are intentionally experimental.
+        const bool HasSideEffects = ExtendedDebugInfo || Thread->OpDispatcher->CanHaveSideEffects(TableInfo, DecodedInfo);
+        const bool IsControlFlow = TableInfo &&
+          (TableInfo->Flags & (FEXCore::X86Tables::InstFlags::FLAGS_SETS_RIP | FEXCore::X86Tables::InstFlags::FLAGS_BLOCK_END));
+        const auto FlushInterval = std::max<uint64_t>(Config.RegisterCacheFlushInterval(), 1);
+        const bool PeriodicFlush = (i % FlushInterval) == 0;
+        if (IsLocked || HasSideEffects || IsControlFlow || PeriodicFlush) {
+          Thread->OpDispatcher->FlushRegisterCache(true);
+        }
 
-        if (ExtendedDebugInfo || Thread->OpDispatcher->CanHaveSideEffects(TableInfo, DecodedInfo)) {
+        if (HasSideEffects) {
           Thread->OpDispatcher->_GuestOpcode(InstAddress - GuestRIP);
         }
 
