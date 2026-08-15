@@ -831,7 +831,7 @@ SharedCodeBufferManager::CodeBufferAllocation Arm64JITCore::AllocateCodeBufferIn
   while (AllocatedInfo.BufferAllocationOffset == nullptr) {
     AllocatedInfo = SharedCodeBuffers.AtomicAllocateBuffer(Size);
 
-    if (AllocatedInfo.BufferAllocationOffset == nullptr) {
+    if (AllocatedInfo.BufferAllocationOffset == nullptr) [[unlikely]] {
       // If it didn't fit then clear the buffer and try again.
       // This has the possibility of migrating the SharedCodeBuffer. See above in `Arm64JITCore::ClearCache()`
       CTX->ClearCodeCache(ThreadState);
