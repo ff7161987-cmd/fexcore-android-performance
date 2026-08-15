@@ -1,0 +1,80 @@
+name: AArch64 Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fexcore-android-performance
+
+permissions:
+  contents: read
+
+jobs:
+  build-aarch64-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out FEX with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang llvm lld cmake ninja-build ccache pkg-config nasm \
+            python3-clang \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
+            gcc-i686-linux-gnu g++-i686-linux-gnu \
+            llvm-dev libclang-dev libssl-dev libglvnd-dev
+
+      - name: Configure AArch64 Release
+        env:
+          SYSROOT: /
+        run: |
+          cmake -S . -B build-aarch64-release -G Ninja \
+            -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" \
+            --toolchain Data/CMake/toolchain_aarch64.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_LTO=ON \
+            -DUSE_LINKER=lld \
+            -DENABLE_CCACHE=ON \
+            -DBUILD_TESTING=OFF \
+            -DBUILD_THUNKS=OFF \
+            -DBUILD_FEXCONFIG=OFF \
+            -DENABLE_GDB_SYMBOLS=OFF \
+            -DTUNE_CPU=none \
+            -DTUNE_ARCH=generic
+
+      - name: Build
+        run: |
+          cmake --build build-aarch64-release --parallel
+          file build-aarch64-release/Bin/FEX
+          test "$(file -b build-aarch64-release/Bin/FEX | grep -c 'ARM aarch64')" -eq 1
+          test "$(file -b build-aarch64-release/Bin/FEX | grep -c stripped)" -eq 1
+
+      - name: Package artifact
+        run: |
+          set -euo pipefail
+          mkdir -p artifact/bin artifact/lib artifact/docs
+          for f in FEX FEXBash FEXGetConfig FEXOfflineCompiler FEXRootFSFetcher FEXServer FEXpidof; do
+            cp "build-aarch64-release/Bin/$f" artifact/bin/
+          done
+          cp build-aarch64-release/FEXCore/Source/libFEXCore.so artifact/lib/
+          cp BUILD_ANDROID.md CHANGELOG-FEXCORE-ANDROID-PERFORMANCE.md artifact/docs/
+          cp benchmarks/README.md benchmarks/ets2_android_capture.sh benchmarks/ets2_results_template.csv artifact/docs/
+          tar -czf fexcore-android-performance-aarch64.tar.gz artifact
+          sha256sum fexcore-android-performance-aarch64.tar.gz > SHA256SUMS
+
+      - name: Upload AArch64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fexcore-android-performance-aarch64
+          path: |
+            fexcore-android-performance-aarch64.tar.gz
+            SHA256SUMS
+          if-no-files-found: error
