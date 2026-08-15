@@ -1,0 +1,7 @@
+build,run,average_fps,one_percent_low_fps,stutter_events,shader_compile_seconds,peak_process_rss_mib,average_process_cpu_percent,device_soc,winlator_or_ludashi_version,resolution,graphics_preset,notes
+reference,1,,,,,,,,,,,
+reference,2,,,,,,,,,,,
+reference,3,,,,,,,,,,,
+optimized,1,,,,,,,,,,,
+optimized,2,,,,,,,,,,,
+optimized,3,,,,,,,,,,,

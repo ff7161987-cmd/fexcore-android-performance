@@ -77,7 +77,8 @@ public:
 
   CodeBufferAllocation AtomicAllocateBuffer(size_t Size) {
     Size = FEXCore::AlignUp(Size, 16);
-    LOGMAN_THROW_A_FMT(reinterpret_cast<uintptr_t>(CodeBufferOffset.load()) % 16 == 0, "Buffer needs to always be 16B aligned!");
+    LOGMAN_THROW_A_FMT(reinterpret_cast<uintptr_t>(CodeBufferOffset.load(std::memory_order_relaxed)) % 16 == 0,
+                       "Buffer needs to always be 16B aligned!");
 
     auto ExpectedOffset = CodeBufferOffset.load(std::memory_order_relaxed);
     auto DesiredOffset = ExpectedOffset + Size;
@@ -87,7 +88,8 @@ public:
       return {};
     }
 
-    while (!CodeBufferOffset.compare_exchange_strong(ExpectedOffset, DesiredOffset)) {
+    while (!CodeBufferOffset.compare_exchange_strong(ExpectedOffset, DesiredOffset, std::memory_order_relaxed,
+                                                       std::memory_order_relaxed)) {
       DesiredOffset = ExpectedOffset + Size;
 
       if (DesiredOffset > CodeBufferEnd) {
@@ -104,7 +106,7 @@ public:
   }
 
   size_t GetAllocatedSize() const {
-    return CodeBufferOffset - CodeBufferBase;
+    return CodeBufferOffset.load(std::memory_order_relaxed) - CodeBufferBase;
   }
 
   virtual void OnCodeBufferAllocated(const std::shared_ptr<CodeBuffer>&) {};
