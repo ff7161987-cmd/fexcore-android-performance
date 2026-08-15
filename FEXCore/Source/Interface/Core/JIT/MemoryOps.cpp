@@ -15,13 +15,6 @@ $end_info$
 #include <FEXCore/Utils/CompilerDefs.h>
 #include <FEXCore/Utils/MathUtils.h>
 
-// Experimental translation fast path. Keep disabled by default so the stable
-// backend remains byte-for-byte comparable; the aggressive WCP enables it at
-// compile time for large REP MOVS/STOS loops.
-#ifndef FEX_ARM64_AGGRESSIVE_COPY_UNROLL
-#define FEX_ARM64_AGGRESSIVE_COPY_UNROLL 0
-#endif
-
 namespace FEXCore::CPU {
 
 DEF_OP(LoadContext) {
@@ -2013,42 +2006,29 @@ DEF_OP(MemSet) {
       ARMEmitter::BackwardLabel AgainInternal256 {};
       ARMEmitter::ForwardLabel AgainInternal128Exit {};
       ARMEmitter::BackwardLabel AgainInternal128 {};
-#if FEX_ARM64_AGGRESSIVE_COPY_UNROLL
-      ARMEmitter::ForwardLabel AgainInternal256Second {};
-#endif
 
       if (IsBackwards) {
         sub(ARMEmitter::Size::i64Bit, TMP2, TMP2, 32 - Size);
       }
 
-      // Keep the counter one copy ahead, so underflow selects the small tail.
+      // Keep the counter one copy ahead, so that underflow can be used to detect when to fallback
+      // to the copy unit size copy loop for the last chunk.
+      // Do this in two parts, to fallback to the byte by byte loop if size < 32, and to the
+      // single copy loop if size < 64.
       sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32 / Size);
       (void)tbnz(TMP1, 63, &AgainInternal128Exit);
-      sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32 / Size);
-      (void)tbnz(TMP1, 63, &AgainInternal256Exit);
 
       // Fill VTMP2 with the set pattern
       dup(SubRegSize, VTMP2.Q(), Value);
 
+      sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32 / Size);
+      (void)tbnz(TMP1, 63, &AgainInternal256Exit);
+
       (void)Bind(&AgainInternal256);
       stp<ARMEmitter::IndexType::POST>(VTMP2.Q(), VTMP2.Q(), TMP2, 32 * Direction);
       stp<ARMEmitter::IndexType::POST>(VTMP2.Q(), VTMP2.Q(), TMP2, 32 * Direction);
-#if FEX_ARM64_AGGRESSIVE_COPY_UNROLL
-      // The first 64-byte pair is always safe after the two pre-decrements.
-      // Emit a second pair only when the remaining counter can cover it.
-      sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
-      (void)tbz(TMP1, 63, &AgainInternal256Second);
-      (void)b(&AgainInternal256Exit);
-      (void)Bind(&AgainInternal256Second);
-      stp<ARMEmitter::IndexType::POST>(VTMP2.Q(), VTMP2.Q(), TMP2, 32 * Direction);
-      stp<ARMEmitter::IndexType::POST>(VTMP2.Q(), VTMP2.Q(), TMP2, 32 * Direction);
       sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
       (void)tbz(TMP1, 63, &AgainInternal256);
-      (void)b(&AgainInternal256Exit);
-#else
-      sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
-      (void)tbz(TMP1, 63, &AgainInternal256);
-#endif
 
       (void)Bind(&AgainInternal256Exit);
       add(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
@@ -2323,9 +2303,6 @@ DEF_OP(MemCpy) {
       ARMEmitter::ForwardLabel AgainInternal128Exit {};
       ARMEmitter::BackwardLabel AgainInternal128 {};
       ARMEmitter::BackwardLabel AgainInternal256 {};
-#if FEX_ARM64_AGGRESSIVE_COPY_UNROLL
-      ARMEmitter::ForwardLabel AgainInternal256Second {};
-#endif
 
       sub(ARMEmitter::Size::i64Bit, TMP4, TMP2, TMP3);
       (void)tbz(TMP4, 63, &AbsPos);
@@ -2339,7 +2316,10 @@ DEF_OP(MemCpy) {
         sub(ARMEmitter::Size::i64Bit, TMP3, TMP3, 32 - Size);
       }
 
-            // Keep the counter one copy ahead, so underflow selects the small tail.
+      // Keep the counter one copy ahead, so that underflow can be used to detect when to fallback
+      // to the copy unit size copy loop for the last chunk.
+      // Do this in two parts, to fallback to the byte by byte loop if size < 32, and to the
+      // single copy loop if size < 64.
       sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32 / Size);
       (void)tbnz(TMP1, 63, &AgainInternal128Exit);
       sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 32 / Size);
@@ -2348,22 +2328,8 @@ DEF_OP(MemCpy) {
       (void)Bind(&AgainInternal256);
       MemCpy(32, 32 * Direction);
       MemCpy(32, 32 * Direction);
-#if FEX_ARM64_AGGRESSIVE_COPY_UNROLL
-      // The first 64-byte pair is always safe after the two pre-decrements.
-      // Emit a second pair only when the remaining counter can cover it.
-      sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
-      (void)tbz(TMP1, 63, &AgainInternal256Second);
-      (void)b(&AgainInternal256Exit);
-      (void)Bind(&AgainInternal256Second);
-      MemCpy(32, 32 * Direction);
-      MemCpy(32, 32 * Direction);
       sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
       (void)tbz(TMP1, 63, &AgainInternal256);
-      (void)b(&AgainInternal256Exit);
-#else
-      sub(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
-      (void)tbz(TMP1, 63, &AgainInternal256);
-#endif
 
       (void)Bind(&AgainInternal256Exit);
       add(ARMEmitter::Size::i64Bit, TMP1, TMP1, 64 / Size);
