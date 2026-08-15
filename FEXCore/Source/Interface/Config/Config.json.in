@@ -202,18 +202,18 @@
       },
       "DisableL2Cache": {
         "Type": "bool",
-        "Default": "true",
+        "Default": "false",
         "Desc": [
-          "Disables FEXCore's JIT L2 cache lookup. Saving memory.",
-          "Can potentially introduce more stutters."
+          "Aggressive experimental default: enables FEXCore's JIT L2 cache lookup.",
+          "Uses more memory and adds lookup work, but can reduce translation misses and stutters."
         ]
       },
       "DynamicL1Cache": {
         "Type": "bool",
-        "Default": "true",
+        "Default": "false",
         "Desc": [
-          "Switches FEXCore's JIT L1 cache to be dynamically sized. Saving memory.",
-          "Can potentially introduce more stutters."
+          "Aggressive experimental default: keep the maximum per-thread L1 cache active.",
+          "Uses more memory but avoids dynamic L1 growth and associated lookup-cache resizing pauses."
         ]
       },
       "DynamicL1CacheIncreaseCountHeuristic": {
